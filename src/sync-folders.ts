@@ -88,6 +88,80 @@ async function suggestProjectDescription(
   return trimmed.length > 0 ? trimmed : null;
 }
 
+async function ensureFoldersExist(
+  app: App,
+  fullPaths: string[],
+): Promise<{ created: number; skipped: number }> {
+  let created = 0;
+  let skipped = 0;
+  for (const path of fullPaths) {
+    try {
+      await app.vault.createFolder(path);
+      created++;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('already exists') || msg.includes('Folder already exists')) {
+        skipped++;
+      } else {
+        throw err;
+      }
+    }
+  }
+  return { created, skipped };
+}
+
+async function syncProjectFiles(
+  app: App,
+  base: string,
+  projectsWithNotes: { path: string; note: string }[],
+  useLLMForEmptyNote: boolean,
+  llmContext: LLMPluginContext | undefined,
+  settings: PluginSettings,
+): Promise<void> {
+  for (const { path: projectPath, note } of projectsWithNotes) {
+    let description = (note ?? '').trim();
+    if (description.length === 0 && useLLMForEmptyNote && llmContext) {
+      const projectName = pathBasename(projectPath);
+      console.log('[omnifocus-sync] Project has no note, asking LLM:', projectPath);
+      try {
+        const tasks = await fetchTasks(
+          { kind: 'project', name: projectName },
+          { includeCompleted: true },
+        );
+        const suggested = await suggestProjectDescription(
+          llmContext,
+          projectName,
+          tasks.map((t) => ({ name: t.name, note: t.note ?? '' })),
+          getLLMModel(settings, 'syncFolders') || undefined,
+        );
+        if (suggested) {
+          await updateProjectNote(projectName, suggested);
+          description = suggested;
+        }
+      } catch (err) {
+        console.warn('[omnifocus-sync] LLM description for project failed:', projectPath, err);
+      }
+    }
+    if (description.length === 0) {
+      description = 'TODO';
+    }
+
+    const fullFolderPath = base ? `${base}/${projectPath}` : projectPath;
+    const fileName = pathBasename(projectPath) + '.md';
+    const filePath = `${fullFolderPath}/${fileName}`;
+
+    const existingFile = app.vault.getFileByPath(filePath);
+    if (!existingFile) {
+      const content = buildNewFrontmatter(description) + '\n';
+      await app.vault.create(filePath, content);
+    } else {
+      const content = await app.vault.read(existingFile);
+      const updated = updateContentFrontmatter(content, description);
+      await app.vault.modify(existingFile, updated);
+    }
+  }
+}
+
 /**
  * Sync folder structure from OmniFocus to the Obsidian vault.
  *
@@ -112,28 +186,10 @@ export async function syncFoldersFromOmniFocus(
 ): Promise<{ created: number; skipped: number }> {
   const projectPaths = await fetchProjectPaths();
   const folderPaths = deriveFolderPathsToCreate(projectPaths);
-
   const base = normalizeBasePath(settings.folderSyncBasePath ?? '');
-  const fullPaths = base
-    ? folderPaths.map((p) => `${base}/${p}`)
-    : folderPaths;
+  const fullPaths = base ? folderPaths.map((p) => `${base}/${p}`) : folderPaths;
 
-  let created = 0;
-  let skipped = 0;
-
-  for (const path of fullPaths) {
-    try {
-      await app.vault.createFolder(path);
-      created++;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes('already exists') || msg.includes('Folder already exists')) {
-        skipped++;
-      } else {
-        throw err;
-      }
-    }
-  }
+  const { created, skipped } = await ensureFoldersExist(app, fullPaths);
 
   const projectsWithNotes = await fetchProjectPathsWithNotes();
   const useLLMForEmptyNote =
@@ -146,77 +202,14 @@ export async function syncFoldersFromOmniFocus(
         : 'enabled';
   console.log('[omnifocus-sync] Sync folders: LLM for empty notes', llmReason);
 
-  for (const { path: projectPath, note } of projectsWithNotes) {
-    let description = (note ?? '').trim();
-    if (description.length === 0 && useLLMForEmptyNote) {
-      const projectName = pathBasename(projectPath);
-      console.log('[omnifocus-sync] Project has no note, asking LLM:', projectPath);
-      try {
-        const tasks = await fetchTasks(
-          { kind: 'project', name: projectName },
-          { includeCompleted: true },
-        );
-        console.log('[omnifocus-sync] Fetched', tasks.length, 'tasks for', projectPath);
-        const suggested = await suggestProjectDescription(
-          llmContext,
-          projectName,
-          tasks.map((t) => ({ name: t.name, note: t.note ?? '' })),
-          getLLMModel(settings, 'syncFolders') || undefined,
-        );
-        if (suggested) {
-          await updateProjectNote(projectName, suggested);
-          console.log(
-            '[omnifocus-sync] Updated project description:',
-            projectPath,
-            '->',
-            suggested,
-          );
-          description = suggested;
-        } else {
-          console.log(
-            '[omnifocus-sync] LLM returned no description for',
-            projectPath,
-            ', using TODO',
-          );
-        }
-      } catch (err) {
-        console.warn(
-          '[omnifocus-sync] LLM description for project failed:',
-          projectPath,
-          err,
-        );
-      }
-    }
-    if (description.length === 0) {
-      description = 'TODO';
-      if (!useLLMForEmptyNote) {
-        console.log(
-          '[omnifocus-sync] Using TODO for',
-          projectPath,
-          '(LLM disabled or not configured)',
-        );
-      }
-    }
-
-    const fullFolderPath = base ? `${base}/${projectPath}` : projectPath;
-    const fileName = pathBasename(projectPath) + '.md';
-    const filePath = `${fullFolderPath}/${fileName}`;
-
-    try {
-      const existingFile = app.vault.getFileByPath(filePath);
-      if (!existingFile) {
-        const content = buildNewFrontmatter(description) + '\n';
-        await app.vault.create(filePath, content);
-      } else {
-        const content = await app.vault.read(existingFile);
-        const updated = updateContentFrontmatter(content, description);
-        await app.vault.modify(existingFile, updated);
-      }
-    } catch (err) {
-      console.error('[omnifocus-sync] Failed to create/update project file:', filePath, err);
-      throw err;
-    }
-  }
+  await syncProjectFiles(
+    app,
+    base,
+    projectsWithNotes,
+    useLLMForEmptyNote,
+    llmContext,
+    settings,
+  );
 
   return { created, skipped };
 }

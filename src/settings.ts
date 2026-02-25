@@ -75,6 +75,10 @@ export function getLLMModel(settings: PluginSettings, feature: LLMFeature): stri
 
 export class SettingsTab extends PluginSettingTab {
   plugin: ObsidianPlugin;
+  private apiKeySetting!: Setting;
+  private baseUrlSetting!: Setting;
+  private datalistId = 'llm-models-default';
+  private datalistEl!: HTMLElement;
 
   constructor(app: App, plugin: ObsidianPlugin) {
     super(app, plugin);
@@ -82,12 +86,21 @@ export class SettingsTab extends PluginSettingTab {
   }
 
   display(): void {
-    const { containerEl } = this;
-    containerEl.empty();
+    this.containerEl.empty();
+    this.renderHeader();
+    this.renderGeneralSettings();
+    this.renderLLMProviderAndCreds();
+    this.renderLLMModelAndOverrides();
+    this.renderSmartSortSettings();
+    this.updateLLMVisibility();
+  }
 
-    containerEl.createEl('h2', { text: 'OmniFocus Sync' });
+  private renderHeader(): void {
+    this.containerEl.createEl('h2', { text: 'OmniFocus Sync' });
+  }
 
-    new Setting(containerEl)
+  private renderGeneralSettings(): void {
+    new Setting(this.containerEl)
       .setName('Text value')
       .setDesc('Enter a value to store.')
       .addText((text) =>
@@ -100,7 +113,7 @@ export class SettingsTab extends PluginSettingTab {
           }),
       );
 
-    new Setting(containerEl)
+    new Setting(this.containerEl)
       .setName('Folder sync base path')
       .setDesc(
         'Optional. Subfolder under which to create synced folders from OmniFocus (e.g. "OmniFocus"). Leave empty to use vault root.',
@@ -114,8 +127,10 @@ export class SettingsTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           }),
       );
+  }
 
-    containerEl.createEl('h2', { text: 'LLM (AI)' });
+  private renderLLMProviderAndCreds(): void {
+    this.containerEl.createEl('h2', { text: 'LLM (AI)' });
 
     const providerOptions: Record<LLMProvider, string> = {
       openrouter: 'OpenRouter',
@@ -124,7 +139,7 @@ export class SettingsTab extends PluginSettingTab {
       custom: 'Custom',
     };
 
-    new Setting(containerEl)
+    new Setting(this.containerEl)
       .setName('Provider')
       .setDesc('LLM provider for AI features.')
       .addDropdown((d) => {
@@ -135,11 +150,11 @@ export class SettingsTab extends PluginSettingTab {
         d.onChange(async (value) => {
           this.plugin.settings.llmProvider = value as LLMProvider;
           await this.plugin.saveSettings();
-          updateLLMVisibility();
+          this.updateLLMVisibility();
         });
       });
 
-    const apiKeySetting = new Setting(containerEl)
+    this.apiKeySetting = new Setting(this.containerEl)
       .setName('API key')
       .setDesc('Required for OpenRouter and OpenAI. Not needed for Ollama.')
       .addText((text) => {
@@ -153,7 +168,7 @@ export class SettingsTab extends PluginSettingTab {
         text.inputEl.type = 'password';
       });
 
-    const baseUrlSetting = new Setting(containerEl)
+    this.baseUrlSetting = new Setting(this.containerEl)
       .setName('Base URL')
       .setDesc('For Ollama: leave default or set custom (e.g. http://localhost:11434/v1). For Custom: required.')
       .addText((text) =>
@@ -166,47 +181,48 @@ export class SettingsTab extends PluginSettingTab {
           }),
       );
 
-    const datalistId = 'llm-models-default';
-    const datalistEl = containerEl.createEl('datalist', { attr: { id: datalistId } });
+    this.datalistEl = this.containerEl.createEl('datalist', { attr: { id: this.datalistId } });
+  }
 
-    const loadModels = async (targetDatalist: HTMLElement): Promise<void> => {
-      const config: LLMConfig = {
-        provider: (this.plugin.settings.llmProvider ?? 'openrouter') as LLMProvider,
-        apiKey: this.plugin.settings.llmApiKey ?? '',
-        baseUrl: this.plugin.settings.llmBaseUrl?.trim() || undefined,
-      };
-      if (!isLLMConfigured(config)) {
-        new Notice('LLM is not configured. Set API key or base URL first.');
-        return;
-      }
-      const requestAdapter = async (opts: {
-        url: string;
-        method?: string;
-        headers?: Record<string, string>;
-        throw?: boolean;
-      }) => {
-        const res = await requestUrl({
-          url: opts.url,
-          method: opts.method ?? 'GET',
-          headers: opts.headers,
-          throw: opts.throw ?? false,
-        });
-        return { status: res.status, json: res.json };
-      };
-      const models = await fetchModels(requestAdapter, config);
-      if (models.length === 0) {
-        new Notice('Could not load models. Check provider and credentials.');
-        return;
-      }
-      targetDatalist.replaceChildren();
-      for (const id of models) {
-        const opt = targetDatalist.createEl('option', { attr: { value: id } });
-        opt.textContent = id;
-      }
-      new Notice(`Loaded ${models.length} models.`);
+  private async loadModels(): Promise<void> {
+    const config: LLMConfig = {
+      provider: (this.plugin.settings.llmProvider ?? 'openrouter') as LLMProvider,
+      apiKey: this.plugin.settings.llmApiKey ?? '',
+      baseUrl: this.plugin.settings.llmBaseUrl?.trim() || undefined,
     };
+    if (!isLLMConfigured(config)) {
+      new Notice('LLM is not configured. Set API key or base URL first.');
+      return;
+    }
+    const requestAdapter = async (opts: {
+      url: string;
+      method?: string;
+      headers?: Record<string, string>;
+      throw?: boolean;
+    }) => {
+      const res = await requestUrl({
+        url: opts.url,
+        method: opts.method ?? 'GET',
+        headers: opts.headers,
+        throw: opts.throw ?? false,
+      });
+      return { status: res.status, json: res.json };
+    };
+    const models = await fetchModels(requestAdapter, config);
+    if (models.length === 0) {
+      new Notice('Could not load models. Check provider and credentials.');
+      return;
+    }
+    this.datalistEl.replaceChildren();
+    for (const id of models) {
+      const opt = this.datalistEl.createEl('option', { attr: { value: id } });
+      opt.textContent = id;
+    }
+    new Notice(`Loaded ${models.length} models.`);
+  }
 
-    new Setting(containerEl)
+  private renderLLMModelAndOverrides(): void {
+    new Setting(this.containerEl)
       .setName('Default model')
       .setDesc('Model used for all AI features unless overridden below.')
       .addText((text) => {
@@ -217,19 +233,19 @@ export class SettingsTab extends PluginSettingTab {
             this.plugin.settings.llmModel = value;
             await this.plugin.saveSettings();
           });
-        text.inputEl.setAttribute('list', datalistId);
+        text.inputEl.setAttribute('list', this.datalistId);
       })
       .addButton((btn) =>
         btn.setButtonText('Load models').onClick(async () => {
           btn.setDisabled(true);
           btn.setButtonText('Loading...');
-          await loadModels(datalistEl);
+          await this.loadModels();
           btn.setDisabled(false);
           btn.setButtonText('Load models');
         }),
       );
 
-    const details = containerEl.createEl('details');
+    const details = this.containerEl.createEl('details');
     details.createEl('summary', { text: 'Override model per feature' });
     const overridesWrap = details.createDiv();
     for (const { id, label } of LLM_OVERRIDE_FEATURES) {
@@ -247,11 +263,13 @@ export class SettingsTab extends PluginSettingTab {
               };
               await this.plugin.saveSettings();
             });
-          text.inputEl.setAttribute('list', datalistId);
+          text.inputEl.setAttribute('list', this.datalistId);
         });
     }
+  }
 
-    new Setting(containerEl)
+  private renderSmartSortSettings(): void {
+    new Setting(this.containerEl)
       .setName('Smart Sort: Additional context')
       .setDesc('Optional context for the LLM (e.g. "Focus on work projects", "Ignore personal items").')
       .addTextArea((text) =>
@@ -264,7 +282,7 @@ export class SettingsTab extends PluginSettingTab {
           }),
       );
 
-    new Setting(containerEl)
+    new Setting(this.containerEl)
       .setName('Smart Sort: Max tasks per batch')
       .setDesc('Maximum tasks to process in one Smart Sort run (default 10).')
       .addText((text) =>
@@ -277,22 +295,21 @@ export class SettingsTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           }),
       );
+  }
 
-    const updateLLMVisibility = (): void => {
-      const p = this.plugin.settings.llmProvider;
-      const needsApiKey = p === 'openrouter' || p === 'openai' || p === 'custom';
-      const needsBaseUrl = p === 'ollama' || p === 'custom';
-      apiKeySetting.settingEl.style.display = needsApiKey ? '' : 'none';
-      baseUrlSetting.settingEl.style.display = needsBaseUrl ? '' : 'none';
-      if (p === 'custom') {
-        apiKeySetting.setDesc('Optional for some endpoints.');
-        baseUrlSetting.setDesc('Required. Base URL including /v1 (e.g. https://api.example.com/v1).');
-      } else if (p === 'ollama') {
-        baseUrlSetting.setDesc('Leave default or set custom (e.g. http://localhost:11434/v1).');
-      } else {
-        apiKeySetting.setDesc(p === 'openrouter' ? 'From openrouter.ai' : 'From platform.openai.com');
-      }
-    };
-    updateLLMVisibility();
+  private updateLLMVisibility(): void {
+    const p = this.plugin.settings.llmProvider;
+    const needsApiKey = p === 'openrouter' || p === 'openai' || p === 'custom';
+    const needsBaseUrl = p === 'ollama' || p === 'custom';
+    this.apiKeySetting.settingEl.style.display = needsApiKey ? '' : 'none';
+    this.baseUrlSetting.settingEl.style.display = needsBaseUrl ? '' : 'none';
+    if (p === 'custom') {
+      this.apiKeySetting.setDesc('Optional for some endpoints.');
+      this.baseUrlSetting.setDesc('Required. Base URL including /v1 (e.g. https://api.example.com/v1).');
+    } else if (p === 'ollama') {
+      this.baseUrlSetting.setDesc('Leave default or set custom (e.g. http://localhost:11434/v1).');
+    } else {
+      this.apiKeySetting.setDesc(p === 'openrouter' ? 'From openrouter.ai' : 'From platform.openai.com');
+    }
   }
 }

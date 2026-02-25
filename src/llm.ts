@@ -81,8 +81,43 @@ export interface LLMRequestAdapter {
     url: string;
     method?: string;
     headers?: Record<string, string>;
+    body?: string;
     throw?: boolean;
   }): Promise<{ status: number; json: unknown }>;
+}
+
+function parseOpenAIFormat(d: unknown): string[] {
+  const obj = d as { data?: { id?: string }[] };
+  return (obj?.data ?? []).map((m) => m.id).filter((id): id is string => typeof id === 'string');
+}
+
+function parseOllamaFormat(d: unknown): string[] {
+  const obj = d as { models?: { name?: string; model?: string }[] };
+  return (obj?.models ?? []).map((m) => m.name ?? m.model ?? '').filter(Boolean);
+}
+
+/** Provider-specific URL and parser for listing models; null if config invalid or unknown. */
+function getProviderModelConfig(
+  config: LLMConfig,
+): { url: string; parseModels: (data: unknown) => string[] } | null {
+  if (config.provider === 'openrouter' || config.provider === 'openai') {
+    if (!config.apiKey?.trim()) return null;
+    const url =
+      config.provider === 'openrouter'
+        ? 'https://openrouter.ai/api/v1/models'
+        : 'https://api.openai.com/v1/models';
+    return { url, parseModels: parseOpenAIFormat };
+  }
+  if (config.provider === 'ollama') {
+    const base = (config.baseUrl?.trim() || 'http://localhost:11434/v1').replace(/\/v1\/?$/, '');
+    return { url: `${base}/api/tags`, parseModels: parseOllamaFormat };
+  }
+  if (config.provider === 'custom') {
+    if (!config.baseUrl?.trim()) return null;
+    const base = config.baseUrl.replace(/\/$/, '');
+    return { url: `${base}/models`, parseModels: parseOpenAIFormat };
+  }
+  return null;
 }
 
 /**
@@ -97,58 +132,19 @@ export async function fetchModels(
   config: LLMConfig,
 ): Promise<string[]> {
   try {
+    const providerConfig = getProviderModelConfig(config);
+    if (!providerConfig) return [];
+
     const headers = buildHeaders(config);
-
-    if (config.provider === 'openrouter' || config.provider === 'openai') {
-      if (!config.apiKey?.trim()) return [];
-    }
-    if (config.provider === 'custom' && !config.baseUrl?.trim()) return [];
-
-    let url: string;
-    let parseModels: (data: unknown) => string[];
-
-    switch (config.provider) {
-      case 'openrouter':
-        url = 'https://openrouter.ai/api/v1/models';
-        parseModels = (d) => {
-          const obj = d as { data?: { id?: string }[] };
-          return (obj?.data ?? []).map((m) => m.id).filter((id): id is string => typeof id === 'string');
-        };
-        break;
-      case 'openai':
-        url = 'https://api.openai.com/v1/models';
-        parseModels = (d) => {
-          const obj = d as { data?: { id?: string }[] };
-          return (obj?.data ?? []).map((m) => m.id).filter((id): id is string => typeof id === 'string');
-        };
-        break;
-      case 'ollama': {
-        const base = (config.baseUrl?.trim() || 'http://localhost:11434/v1').replace(/\/v1\/?$/, '');
-        url = `${base}/api/tags`;
-        parseModels = (d) => {
-          const obj = d as { models?: { name?: string; model?: string }[] };
-          return (obj?.models ?? []).map((m) => m.name ?? m.model ?? '').filter(Boolean);
-        };
-        break;
-      }
-      case 'custom': {
-        const base = config.baseUrl!.replace(/\/$/, '');
-        url = `${base}/models`;
-        parseModels = (d) => {
-          const obj = d as { data?: { id?: string }[] };
-          return (obj?.data ?? []).map((m) => m.id).filter((id): id is string => typeof id === 'string');
-        };
-        break;
-      }
-      default:
-        return [];
-    }
-
-    const res = await requestAdapter({ url, method: 'GET', headers, throw: false });
+    const res = await requestAdapter({
+      url: providerConfig.url,
+      method: 'GET',
+      headers,
+      throw: false,
+    });
     if (res.status >= 400) return [];
 
-    const data = res.json;
-    return parseModels(data) ?? [];
+    return providerConfig.parseModels(res.json) ?? [];
   } catch {
     return [];
   }

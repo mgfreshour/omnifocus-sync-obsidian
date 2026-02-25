@@ -6,80 +6,84 @@ import {
   sourceLabel,
 } from './omnifocus';
 
-describe('parseSource', () => {
-  it('returns null for empty string', () => {
-    expect(parseSource('')).toBeNull();
-  });
-
-  it('returns null for whitespace-only string', () => {
-    expect(parseSource('   ')).toBeNull();
-  });
-
-  it('parses "inbox"', () => {
-    expect(parseSource('inbox')).toEqual({ kind: 'inbox' });
-  });
-
-  it('parses "INBOX" (case-insensitive)', () => {
-    expect(parseSource('INBOX')).toEqual({ kind: 'inbox' });
-  });
-
-  it('parses "inbox" with surrounding whitespace', () => {
-    expect(parseSource('  inbox  ')).toEqual({ kind: 'inbox' });
-  });
-
-  it('parses "project: Foo"', () => {
-    expect(parseSource('project: Foo')).toEqual({ kind: 'project', name: 'Foo' });
-  });
-
-  it('parses "Project: Foo" (case-insensitive keyword)', () => {
-    expect(parseSource('Project: Foo')).toEqual({ kind: 'project', name: 'Foo' });
-  });
-
-  it('trims project name whitespace', () => {
-    expect(parseSource('project:   My Project  ')).toEqual({
-      kind: 'project',
-      name: 'My Project',
+describe('parseSource - empty and inbox', () => {
+    it('returns null for empty string', () => {
+      expect(parseSource('')).toBeNull();
     });
-  });
 
-  it('throws for empty project name', () => {
-    expect(() => parseSource('project:   ')).toThrow('Unknown source');
-  });
-
-  it('parses "tag: @Work"', () => {
-    expect(parseSource('tag: @Work')).toEqual({ kind: 'tag', name: '@Work' });
-  });
-
-  it('parses "Tag: Work" (case-insensitive keyword)', () => {
-    expect(parseSource('Tag: Work')).toEqual({ kind: 'tag', name: 'Work' });
-  });
-
-  it('trims tag name whitespace', () => {
-    expect(parseSource('tag:   @Personal  ')).toEqual({
-      kind: 'tag',
-      name: '@Personal',
+    it('returns null for whitespace-only string', () => {
+      expect(parseSource('   ')).toBeNull();
     });
-  });
 
-  it('throws for empty tag name', () => {
-    expect(() => parseSource('tag:   ')).toThrow('Unknown source');
-  });
+    it('parses "inbox"', () => {
+      expect(parseSource('inbox')).toEqual({ kind: 'inbox' });
+    });
 
-  it('throws for unknown source', () => {
-    expect(() => parseSource('nonsense')).toThrow('Unknown source');
-  });
+    it('parses "INBOX" (case-insensitive)', () => {
+      expect(parseSource('INBOX')).toEqual({ kind: 'inbox' });
+    });
 
-  it('lists all valid formats in unknown source error', () => {
-    try {
-      parseSource('nonsense');
-      fail('expected to throw');
-    } catch (err) {
-      const msg = (err as Error).message;
-      expect(msg).toContain('inbox');
-      expect(msg).toContain('project: <name>');
-      expect(msg).toContain('tag: <name>');
-    }
-  });
+    it('parses "inbox" with surrounding whitespace', () => {
+      expect(parseSource('  inbox  ')).toEqual({ kind: 'inbox' });
+    });
+});
+
+describe('parseSource - project and tag', () => {
+    it('parses "project: Foo"', () => {
+      expect(parseSource('project: Foo')).toEqual({ kind: 'project', name: 'Foo' });
+    });
+
+    it('parses "Project: Foo" (case-insensitive keyword)', () => {
+      expect(parseSource('Project: Foo')).toEqual({ kind: 'project', name: 'Foo' });
+    });
+
+    it('trims project name whitespace', () => {
+      expect(parseSource('project:   My Project  ')).toEqual({
+        kind: 'project',
+        name: 'My Project',
+      });
+    });
+
+    it('throws for empty project name', () => {
+      expect(() => parseSource('project:   ')).toThrow('Unknown source');
+    });
+
+    it('parses "tag: @Work"', () => {
+      expect(parseSource('tag: @Work')).toEqual({ kind: 'tag', name: '@Work' });
+    });
+
+    it('parses "Tag: Work" (case-insensitive keyword)', () => {
+      expect(parseSource('Tag: Work')).toEqual({ kind: 'tag', name: 'Work' });
+    });
+
+    it('trims tag name whitespace', () => {
+      expect(parseSource('tag:   @Personal  ')).toEqual({
+        kind: 'tag',
+        name: '@Personal',
+      });
+    });
+
+    it('throws for empty tag name', () => {
+      expect(() => parseSource('tag:   ')).toThrow('Unknown source');
+    });
+});
+
+describe('parseSource - errors', () => {
+    it('throws for unknown source', () => {
+      expect(() => parseSource('nonsense')).toThrow('Unknown source');
+    });
+
+    it('lists all valid formats in unknown source error', () => {
+      try {
+        parseSource('nonsense');
+        fail('expected to throw');
+      } catch (err) {
+        const msg = (err as Error).message;
+        expect(msg).toContain('inbox');
+        expect(msg).toContain('project: <name>');
+        expect(msg).toContain('tag: <name>');
+      }
+    });
 });
 
 describe('parseBlockConfig', () => {
