@@ -1,0 +1,10 @@
+{
+	"id": "omnifocus-sync",
+	"name": "OmniFocus Sync",
+	"version": "0.1.0",
+	"minAppVersion": "0.15.0",
+	"description": "OmniFocus integration for Obsidian",
+	"author": "",
+	"authorUrl": "",
+	"isDesktopOnly": true
+}

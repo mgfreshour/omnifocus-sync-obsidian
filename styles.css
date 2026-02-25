@@ -1,0 +1,208 @@
+/* Plugin styles */
+
+.omnifocus-container {
+  padding: 16px 20px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 10px;
+  margin: 12px 0;
+  background: var(--background-secondary);
+}
+
+.omnifocus-btn-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.omnifocus-add-btn {
+  cursor: pointer;
+  padding: 8px 18px;
+  border-radius: 6px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 13px;
+  font-weight: 500;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+
+.omnifocus-add-btn:hover {
+  background: var(--background-modifier-hover);
+}
+
+.omnifocus-sync-btn {
+  cursor: pointer;
+  padding: 8px 18px;
+  border-radius: 6px;
+  border: none;
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+  font-size: 13px;
+  font-weight: 500;
+  transition: opacity 0.15s ease;
+}
+
+.omnifocus-sync-btn:hover {
+  opacity: 0.9;
+}
+
+.omnifocus-sync-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.omnifocus-task-list {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+}
+
+.omnifocus-task-list > li {
+  padding: 10px 0;
+  white-space: pre-line;
+  border-bottom: 1px solid var(--background-modifier-border);
+  transition: background-color 0.12s ease;
+}
+
+.omnifocus-task-list > li:last-child {
+  border-bottom: none;
+}
+
+.omnifocus-task-list > li:hover {
+  background: var(--background-modifier-hover);
+  margin-left: -12px;
+  margin-right: -12px;
+  padding-left: 12px;
+  padding-right: 12px;
+  border-radius: 6px;
+}
+
+.omnifocus-task-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.omnifocus-task-checkbox {
+  flex-shrink: 0;
+  cursor: pointer;
+  align-self: center;
+  margin-right: 4px;
+}
+
+.omnifocus-task-completed-marker {
+  flex-shrink: 0;
+  align-self: center;
+  margin-right: 4px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.omnifocus-task-item .omnifocus-task-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.omnifocus-task-item--completed .omnifocus-task-name {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+.omnifocus-task-item--completed:hover .omnifocus-task-name {
+  text-decoration: none;
+  color: var(--text-normal);
+}
+
+.omnifocus-task-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  font-size: 12px;
+  border-radius: 4px;
+  color: var(--text-muted);
+  text-decoration: none;
+  flex-shrink: 0;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.omnifocus-task-link:hover {
+  color: var(--interactive-accent);
+  background: var(--background-modifier-hover);
+}
+
+.omnifocus-task-note-toggle {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-muted);
+  user-select: none;
+  margin-left: 4px;
+  flex-shrink: 0;
+  transition: color 0.15s ease;
+}
+
+.omnifocus-task-note-toggle:hover {
+  color: var(--text-normal);
+}
+
+.omnifocus-task-note {
+  display: none;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  white-space: pre-line;
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--background-primary);
+  border-left: 3px solid var(--interactive-accent);
+  width: 100%;
+}
+
+.omnifocus-task-note.is-open {
+  display: block;
+}
+
+.omnifocus-empty {
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 14px;
+  padding: 20px 0;
+}
+
+.omnifocus-error {
+  white-space: pre-line;
+  font-size: 13px;
+  color: var(--text-error);
+}
+
+.omnifocus-usage {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.omnifocus-add-task-modal .setting-item {
+  display: flex;
+}
+
+.omnifocus-add-task-modal .setting-item-control {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: none;
+}
+
+.omnifocus-add-task-modal .setting-item-control input,
+.omnifocus-add-task-modal .setting-item-control textarea {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.omnifocus-add-task-modal .setting-item-control textarea {
+  resize: vertical;
+  min-height: 80px;
+}
