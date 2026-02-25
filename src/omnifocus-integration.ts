@@ -8,6 +8,7 @@
 import { html, render } from 'lit';
 import { Notice, requestUrl } from 'obsidian';
 import type { App } from 'obsidian';
+import { getLLMModel } from './settings';
 import type { PluginSettings } from './settings';
 import {
   completeTask,
@@ -126,7 +127,7 @@ export function registerOmniFocusIntegration(plugin: OmnifocusPluginContext): vo
         provider: (plugin.settings.llmProvider ?? 'openrouter') as LLMProvider,
         apiKey: plugin.settings.llmApiKey ?? '',
         baseUrl: plugin.settings.llmBaseUrl?.trim() || undefined,
-        model: plugin.settings.llmModelSmartSort || plugin.settings.llmModelUserStory,
+        model: getLLMModel(plugin.settings, 'smartSort') || undefined,
       }),
       requestUrl: async (opts) => {
         const res = await requestUrl({

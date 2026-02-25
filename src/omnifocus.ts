@@ -915,6 +915,47 @@ end run
 }
 
 /**
+ * Update the note (description) of a project in OmniFocus.
+ *
+ * @param projectName - The exact project name (resolved via resolveName).
+ * @param note - The new note text.
+ * @throws If `osascript` fails or project not found.
+ */
+export async function updateProjectNote(
+  projectName: string,
+  note: string,
+): Promise<void> {
+  const projects = await fetchProjectNames();
+  const resolved = resolveName(projectName, projects, 'project');
+
+  const script = `
+on run argv
+  set projectName to item 1 of argv
+  set noteText to item 2 of argv
+  tell application "OmniFocus"
+    tell default document
+      set proj to first flattened project whose name is projectName
+      set note of proj to noteText
+    end tell
+  end tell
+end run
+`;
+  return new Promise((resolve, reject) => {
+    execFile('osascript', ['-e', script, resolved, note], (error, _stdout, stderr) => {
+      if (error) {
+        reject(
+          new Error(
+            `Failed to update OmniFocus project note: ${stderr || error.message}`,
+          ),
+        );
+        return;
+      }
+      resolve();
+    });
+  });
+}
+
+/**
  * Move a task to a project in OmniFocus by task id and project name.
  *
  * @param taskId - The task's persistent id.

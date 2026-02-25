@@ -19,6 +19,24 @@ import {
   type LLMProvider,
 } from './llm';
 
+/** Features that can have an optional LLM model override. Single source of truth for UI and map keys. */
+export const LLM_OVERRIDE_FEATURES = [
+  { id: 'userStory' as const, label: 'User story' },
+  { id: 'smartSort' as const, label: 'Smart sort' },
+  { id: 'syncFolders' as const, label: 'Sync folders' },
+] as const;
+
+export type LLMFeatureOverride = (typeof LLM_OVERRIDE_FEATURES)[number]['id'];
+export type LLMFeature = 'default' | LLMFeatureOverride;
+
+function defaultLlmModelOverrides(): Record<LLMFeatureOverride, string> {
+  const out = {} as Record<LLMFeatureOverride, string>;
+  for (const { id } of LLM_OVERRIDE_FEATURES) {
+    out[id] = '';
+  }
+  return out;
+}
+
 export interface PluginSettings {
   textValue: string;
   folderSyncBasePath: string;
@@ -26,8 +44,7 @@ export interface PluginSettings {
   llmApiKey: string;
   llmBaseUrl: string;
   llmModel: string;
-  llmModelUserStory: string;
-  llmModelSmartSort: string;
+  llmModelOverrides: Record<LLMFeatureOverride, string>;
   smartSortAdditionalContext: string;
   smartSortMaxTasksPerBatch: number;
 }
@@ -39,11 +56,22 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   llmApiKey: '',
   llmBaseUrl: '',
   llmModel: '',
-  llmModelUserStory: '',
-  llmModelSmartSort: '',
+  llmModelOverrides: defaultLlmModelOverrides(),
   smartSortAdditionalContext: '',
   smartSortMaxTasksPerBatch: 10,
 };
+
+/**
+ * Returns the effective LLM model for a feature: default model or the feature's override.
+ */
+export function getLLMModel(settings: PluginSettings, feature: LLMFeature): string {
+  const defaultModel = settings.llmModel?.trim() ?? '';
+  if (feature === 'default') {
+    return defaultModel;
+  }
+  const override = settings.llmModelOverrides[feature]?.trim();
+  return override || defaultModel;
+}
 
 export class SettingsTab extends PluginSettingTab {
   plugin: ObsidianPlugin;
@@ -138,14 +166,8 @@ export class SettingsTab extends PluginSettingTab {
           }),
       );
 
-    containerEl.createEl('h3', { text: 'Model' });
-
-    const datalistId = 'llm-models-userstory';
+    const datalistId = 'llm-models-default';
     const datalistEl = containerEl.createEl('datalist', { attr: { id: datalistId } });
-    const datalistSmartSortId = 'llm-models-smartsort';
-    const datalistSmartSortEl = containerEl.createEl('datalist', {
-      attr: { id: datalistSmartSortId },
-    });
 
     const loadModels = async (targetDatalist: HTMLElement): Promise<void> => {
       const config: LLMConfig = {
@@ -185,14 +207,14 @@ export class SettingsTab extends PluginSettingTab {
     };
 
     new Setting(containerEl)
-      .setName('Model')
-      .setDesc('Model for AI features. Click Load models to fetch from provider.')
+      .setName('Default model')
+      .setDesc('Model used for all AI features unless overridden below.')
       .addText((text) => {
         text
           .setPlaceholder('e.g. gpt-4o, llama3.2')
-          .setValue(this.plugin.settings.llmModelUserStory)
+          .setValue(this.plugin.settings.llmModel)
           .onChange(async (value) => {
-            this.plugin.settings.llmModelUserStory = value;
+            this.plugin.settings.llmModel = value;
             await this.plugin.saveSettings();
           });
         text.inputEl.setAttribute('list', datalistId);
@@ -207,28 +229,27 @@ export class SettingsTab extends PluginSettingTab {
         }),
       );
 
-    new Setting(containerEl)
-      .setName('Model (Smart sort)')
-      .setDesc('Model for Smart Sort inbox suggestions.')
-      .addText((text) => {
-        text
-          .setPlaceholder('e.g. gpt-4o, llama3.2')
-          .setValue(this.plugin.settings.llmModelSmartSort)
-          .onChange(async (value) => {
-            this.plugin.settings.llmModelSmartSort = value;
-            await this.plugin.saveSettings();
-          });
-        text.inputEl.setAttribute('list', datalistSmartSortId);
-      })
-      .addButton((btn) =>
-        btn.setButtonText('Load models').onClick(async () => {
-          btn.setDisabled(true);
-          btn.setButtonText('Loading...');
-          await loadModels(datalistSmartSortEl);
-          btn.setDisabled(false);
-          btn.setButtonText('Load models');
-        }),
-      );
+    const details = containerEl.createEl('details');
+    details.createEl('summary', { text: 'Override model per feature' });
+    const overridesWrap = details.createDiv();
+    for (const { id, label } of LLM_OVERRIDE_FEATURES) {
+      new Setting(overridesWrap)
+        .setName(label)
+        .setDesc(`Optional. Override the default model for ${label}.`)
+        .addText((text) => {
+          text
+            .setPlaceholder('Leave empty to use default')
+            .setValue(this.plugin.settings.llmModelOverrides[id] ?? '')
+            .onChange(async (value) => {
+              this.plugin.settings.llmModelOverrides = {
+                ...this.plugin.settings.llmModelOverrides,
+                [id]: value,
+              };
+              await this.plugin.saveSettings();
+            });
+          text.inputEl.setAttribute('list', datalistId);
+        });
+    }
 
     new Setting(containerEl)
       .setName('Smart Sort: Additional context')

@@ -25,6 +25,7 @@ import { fetchProjectsWithNotes, fetchTasks, updateTask } from './omnifocus';
 import type { OmniFocusTask } from './omnifocus';
 import { simpleChat } from './llm';
 import type { LLMPluginContext } from './llm';
+import { getLLMModel } from './settings';
 import type { PluginSettings } from './settings';
 import { isLLMConfigured } from './llm';
 import {
@@ -198,8 +199,7 @@ export async function smartSort(
   ctx: LLMPluginContext,
   settings: PluginSettings,
 ): Promise<SmartSortResult> {
-  const effectiveModel =
-    settings.llmModelSmartSort?.trim() || settings.llmModelUserStory?.trim();
+  const effectiveModel = getLLMModel(settings, 'smartSort');
   const config = { ...ctx.getConfig(), model: effectiveModel };
 
   if (!isLLMConfigured(config)) {
@@ -207,7 +207,7 @@ export async function smartSort(
   }
   if (!effectiveModel) {
     throw new Error(
-      'No model selected for Smart Sort. Set "Model (Smart sort)" in plugin settings.',
+      'No model selected for Smart Sort. Set Default model or Smart sort override in plugin settings.',
     );
   }
 

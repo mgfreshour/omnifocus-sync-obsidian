@@ -1,8 +1,10 @@
-import { Plugin } from 'obsidian';
-import { DEFAULT_SETTINGS, SettingsTab } from './src/settings';
+import { Plugin, requestUrl } from 'obsidian';
+import { DEFAULT_SETTINGS, getLLMModel, SettingsTab } from './src/settings';
 import type { PluginSettings } from './src/settings';
 import { registerOmniFocusIntegration } from './src/omnifocus-integration';
 import { runSyncFoldersAndNotify } from './src/sync-folders';
+import type { LLMPluginContext } from './src/llm';
+import type { LLMProvider } from './src/llm';
 
 export default class ObsidianPlugin extends Plugin {
   settings!: PluginSettings;
@@ -19,7 +21,31 @@ export default class ObsidianPlugin extends Plugin {
       id: 'sync-folders',
       name: 'Sync folders from OmniFocus',
       callback: () => {
-        runSyncFoldersAndNotify(this.app, this.settings);
+        const llmContext: LLMPluginContext = {
+          getConfig: () => ({
+            provider: (this.settings.llmProvider ?? 'openrouter') as LLMProvider,
+            apiKey: this.settings.llmApiKey ?? '',
+            baseUrl: this.settings.llmBaseUrl?.trim() || undefined,
+            model: getLLMModel(this.settings, 'syncFolders') || undefined,
+          }),
+          requestUrl: async (opts) => {
+            const res = await requestUrl({
+              url: opts.url,
+              method: opts.method ?? 'GET',
+              headers: opts.headers,
+              body: opts.body,
+              throw: opts.throw ?? false,
+            });
+            const resAny = res as { json: unknown };
+            const rawJson = resAny.json;
+            const json =
+              typeof rawJson === 'object' && rawJson !== null && typeof (rawJson as Promise<unknown>).then === 'function'
+                ? await (rawJson as Promise<unknown>)
+                : rawJson;
+            return { status: res.status, json: json ?? null };
+          },
+        };
+        runSyncFoldersAndNotify(this.app, this.settings, llmContext);
       },
     });
   }
@@ -30,24 +56,7 @@ export default class ObsidianPlugin extends Plugin {
 
   async loadSettings() {
     const raw = await this.loadData();
-    const migrated = (raw ?? {}) as Record<string, unknown>;
-    if (
-      migrated?.openRouterApiKey != null &&
-      (migrated.llmProvider == null || migrated.llmApiKey == null)
-    ) {
-      migrated.llmProvider = 'openrouter';
-      migrated.llmApiKey = String(migrated.openRouterApiKey);
-      migrated.llmBaseUrl = migrated.llmBaseUrl ?? '';
-      migrated.llmModel = migrated.llmModel ?? '';
-      delete migrated.openRouterApiKey;
-    }
-    if (migrated.llmModelUserStory == null && migrated.llmModel != null) {
-      migrated.llmModelUserStory = migrated.llmModel;
-    }
-    if (migrated.llmModelSmartSort == null && migrated.llmModelUserStory != null) {
-      migrated.llmModelSmartSort = migrated.llmModelUserStory;
-    }
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, migrated);
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, raw ?? {});
   }
 
   async saveSettings() {

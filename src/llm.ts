@@ -312,5 +312,29 @@ export async function simpleChat(
   }
 
   const content = firstChoice.message?.content;
-  return content ?? '';
+  return extractMessageContent(content);
+}
+
+/**
+ * Extract plain text from message content, which may be a string or an array
+ * of content parts (e.g. OpenRouter / newer OpenAI format).
+ */
+function extractMessageContent(content: unknown): string {
+  if (content == null) {
+    return '';
+  }
+  if (typeof content === 'string') {
+    return content;
+  }
+  if (Array.isArray(content)) {
+    return content
+      .map((part: unknown) => {
+        if (typeof part !== 'object' || part === null) return '';
+        const p = part as Record<string, unknown>;
+        if (p.type === 'text' && typeof p.text === 'string') return p.text;
+        return '';
+      })
+      .join('');
+  }
+  return '';
 }

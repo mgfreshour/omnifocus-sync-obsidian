@@ -1,24 +1,17 @@
 {
   "parser": "@typescript-eslint/parser",
-  "parserOptions": {
-    "ecmaVersion": 2020,
-    "sourceType": "module"
-  },
-  "extends": [
-    "eslint:recommended",
-    "plugin:@typescript-eslint/recommended"
-  ],
-  "env": {
-    "browser": true,
-    "es2020": true,
-    "node": true
-  },
+  "parserOptions": { "ecmaVersion": 2020, "sourceType": "module" },
+  "extends": ["eslint:recommended", "plugin:@typescript-eslint/recommended"],
+  "env": { "browser": true, "es2020": true, "node": true },
   "rules": {
     "no-unused-vars": "off",
     "@typescript-eslint/no-unused-vars": "warn",
     "@typescript-eslint/no-explicit-any": "warn",
     "@typescript-eslint/ban-ts-comment": "off",
     "no-prototype-builtins": "off",
-    "@typescript-eslint/no-empty-function": "off"
+    "@typescript-eslint/no-empty-function": "off",
+    "max-lines": ["warn", { "max": 400, "skipBlankLines": true, "skipComments": true }],
+    "max-lines-per-function": ["warn", { "max": 60, "skipBlankLines": true, "skipComments": true }],
+    "complexity": ["warn", { "max": 12 }]
   }
 }
