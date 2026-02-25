@@ -6,41 +6,15 @@ An Obsidian community plugin that integrates with OmniFocus 4 on macOS. It fetch
 tasks from OmniFocus via AppleScript and displays them inline in markdown code blocks.
 Supports inbox, project, and tag sources with fuzzy substring matching.
 
-- **Plugin ID**: `omnifocus-sync` (set in `manifest.json`)
-- **Version**: 0.1.0
-- **Min Obsidian version**: 0.15.0
-- **Mobile support**: Yes (`isDesktopOnly: false`)
-- **Runtime dependencies**: None (only devDependencies)
-- **License**: MIT
+See `manifest.json` and `package.json` for ID, version, and scripts.
 
-## Repository Structure
+## Before completing work
 
-```
-omnifocus-sync/
-├── main.ts                         # Plugin entry point (extends Plugin class)
-├── src/
-│   ├── omnifocus.ts                # OmniFocus AppleScript integration
-│   ├── omnifocus.test.ts           # Unit tests for omnifocus.ts
-│   └── settings.ts                 # Plugin settings interface & UI tab
-├── styles.css                      # Plugin stylesheet
-├── manifest.json                   # Obsidian plugin manifest (id, version, etc.)
-├── versions.json                   # Release version tracking (empty)
-├── package.json                    # pnpm config, scripts, devDependencies
-├── tsconfig.json                   # TypeScript strict-mode config
-├── esbuild.config.mjs              # Bundler: entry=main.ts → main.js (CJS)
-├── jest.config.js                  # Jest + ts-jest test config
-├── .eslintrc.json                  # ESLint + @typescript-eslint rules
-├── .eslintignore                   # Excludes node_modules, main.js, test-vault, dist
-├── .gitignore                      # Excludes .env, node_modules, main.js, test-vault, etc.
-├── CLAUDE.md                       # AI assistant instructions & codebase context
-├── AGENTS.md                       # Symlink → CLAUDE.md
-├── README.md                       # Project readme
-├── docs/
-│   └── omnifocus-applescript.md    # OmniFocus AppleScript + Node.js reference
-└── scripts/
-    ├── generate-test-vault.mjs     # Creates a test Obsidian vault with plugin installed
-    └── test-omnifocus.ts           # CLI integration test for OmniFocus functions
-```
+**For every feature or code change, run `pnpm test` and `pnpm lint` (or `pnpm lint:fix`); fix any failures before considering the work complete.** Both must pass before marking a task done.
+
+## Repository
+
+Entry: `main.ts`. Feature code in `src/`. Config in repo root; use the file explorer or `package.json` when needed.
 
 ## OmniFocus Integration (`src/omnifocus.ts`)
 
@@ -74,77 +48,17 @@ Key Obsidian lifecycle hooks:
 - **`onunload()`** — called when the plugin is disabled. Clean up all resources
   (intervals, event listeners, DOM mutations, registered views).
 
-## Build System
+## Build, tests, lint
 
-### esbuild (esbuild.config.mjs)
+- **Build**: `pnpm build` (typecheck + bundle). Config: `esbuild.config.mjs`, `tsconfig.json`.
+- **Testing**: Jest; tests co-located (`*.test.ts`). Run `pnpm test`. See `jest.config.js` if needed.
+- **Linting**: ESLint + @typescript-eslint. Run `pnpm lint` / `pnpm lint:fix`. Config: `.eslintrc.json`.
+- **Manual QA**: `scripts/generate-test-vault.mjs` (run after build).
+- See `package.json` scripts for the full list.
 
-- **Entry**: `main.ts` → **Output**: `main.js` (CommonJS, ES2018 target)
-- **External** (provided by Obsidian at runtime): `obsidian`, `electron`,
-  `@codemirror/*`, `@lezer/*`, all Node.js built-ins
-- **Dev mode** (`pnpm dev`): watch mode, inline source maps
-- **Production** (`pnpm build`): `tsc --noEmit` type check, then single rebuild, no source maps, tree-shaken
-- Adds a banner comment to the output file
+## Obsidian API
 
-### TypeScript (tsconfig.json)
-
-- `strict: true` (includes `strictNullChecks`, `noImplicitAny`, etc.)
-- Target: ES6, Module: ESNext, Resolution: Node
-- Includes all `**/*.ts`, excludes `node_modules` and `test-vault`
-
-### pnpm Scripts
-
-| Script              | Command                                       | Purpose                          |
-|---------------------|-----------------------------------------------|----------------------------------|
-| `pnpm dev`          | `node esbuild.config.mjs`                     | Watch mode with source maps      |
-| `pnpm build`        | `tsc --noEmit && node esbuild.config.mjs --production` | Type check + production bundle |
-| `pnpm test`         | `jest`                                        | Run unit tests                   |
-| `pnpm lint`         | `eslint . --ext .ts`                          | Lint TypeScript files            |
-| `pnpm lint:fix`     | `eslint . --ext .ts --fix`                    | Auto-fix lint issues             |
-| `pnpm generate-vault` | `node scripts/generate-test-vault.mjs`   | Create test vault for manual QA  |
-| `pnpm launch`       | `pnpm run build && pnpm run generate-vault && node scripts/launch-obsidian.mjs` | Build, generate vault, open Obsidian |
-
-## Testing
-
-- **Framework**: Jest 29 with ts-jest
-- **Test patterns**: `__tests__/**/*.ts` and `**/*.{spec,test}.ts`
-- **Environment**: Node
-- **Coverage**: collected from all `.ts` files (excluding `.d.ts`)
-- Tests co-located with source: `src/omnifocus.test.ts`
-- CLI integration test: `pnpm exec tsx scripts/test-omnifocus.ts`
-
-## Linting
-
-- ESLint with `@typescript-eslint` parser and recommended rules
-- Key rule overrides:
-  - `@typescript-eslint/no-unused-vars`: warn
-  - `@typescript-eslint/no-explicit-any`: warn
-  - `@typescript-eslint/ban-ts-comment`: off
-  - `@typescript-eslint/no-empty-function`: off
-
-## Test Vault Generator (scripts/generate-test-vault.mjs)
-
-Creates a `test-vault/` directory that can be opened in Obsidian for manual testing:
-- Reads plugin name from `package.json` (overridable via CLI arg)
-- Creates `.obsidian/` config structure with the plugin registered
-- Copies `manifest.json` and `main.js` into the vault's plugins directory
-- Generates sample markdown files (Welcome.md, OmniFocus Tests.md)
-- Requires `pnpm build` first so `main.js` exists
-
-## Key Obsidian APIs (for future development)
-
-These are the primary APIs available via `this` inside the Plugin class:
-
-| API                       | Purpose                                    |
-|---------------------------|--------------------------------------------|
-| `this.addCommand()`       | Register commands (palette, hotkeys)       |
-| `this.addSettingTab()`    | Add a settings tab to the plugin settings  |
-| `this.addRibbonIcon()`    | Add an icon to the left ribbon             |
-| `this.registerView()`     | Register a custom view type                |
-| `this.app.vault`          | Read/write/delete files and folders        |
-| `this.app.metadataCache`  | Access parsed frontmatter, links, tags     |
-| `this.app.workspace`      | Manage leaves, splits, and the active view |
-| `this.loadData()`         | Load persisted plugin settings (data.json) |
-| `this.saveData()`         | Save plugin settings to data.json          |
+Use Obsidian plugin API docs; common hooks: `addCommand`, `addSettingTab`, `app.vault`, `app.metadataCache`, `app.workspace`, `loadData`/`saveData`.
 
 ## Common Patterns for New Features
 
@@ -218,6 +132,7 @@ this.addCommand({
 
 ## Testing Requirements
 
+- **Run `pnpm test` and `pnpm lint` for every change** (see Before completing work above).
 - Write unit tests for utility functions
 - Mock Obsidian API objects in tests
 - Test error handling paths

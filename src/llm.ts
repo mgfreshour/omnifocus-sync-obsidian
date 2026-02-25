@@ -180,15 +180,16 @@ export function resolveChatCompletionsBaseUrl(config: LLMConfig): string {
       return 'https://api.openai.com/v1';
     case 'ollama':
       return (config.baseUrl?.trim() || 'http://localhost:11434/v1').replace(/\/$/, '');
-    case 'custom':
+    case 'custom': {
       const url = config.baseUrl?.trim();
       if (!url) {
         throw new Error('Custom provider requires a base URL. Add it in plugin settings.');
       }
       return url.replace(/\/$/, '');
+    }
     default: {
       const _: never = config.provider;
-      throw new Error(`Unknown LLM provider: ${config.provider}`);
+      throw new Error(`Unknown LLM provider: ${String(_)}`);
     }
   }
 }

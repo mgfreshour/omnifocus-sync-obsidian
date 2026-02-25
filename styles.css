@@ -51,6 +51,27 @@
   cursor: not-allowed;
 }
 
+.omnifocus-smartsort-btn {
+  cursor: pointer;
+  padding: 8px 18px;
+  border-radius: 6px;
+  border: none;
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+  font-size: 13px;
+  font-weight: 500;
+  transition: opacity 0.15s ease;
+}
+
+.omnifocus-smartsort-btn:hover {
+  opacity: 0.9;
+}
+
+.omnifocus-smartsort-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .omnifocus-task-list {
   list-style: none;
   padding-left: 0;
@@ -205,4 +226,117 @@
 .omnifocus-add-task-modal .setting-item-control textarea {
   resize: vertical;
   min-height: 80px;
+}
+
+/* Smart Sort results block */
+.omnifocus-smartsort-results {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.omnifocus-smartsort-heading {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 10px 0;
+  color: var(--text-normal);
+}
+
+.omnifocus-smartsort-error .omnifocus-smartsort-heading {
+  margin-bottom: 6px;
+}
+
+.omnifocus-smartsort-error-text,
+.omnifocus-smartsort-info {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0 0 8px 0;
+  white-space: pre-line;
+}
+
+.omnifocus-smartsort-error .omnifocus-smartsort-error-text {
+  color: var(--text-error);
+}
+
+.omnifocus-smartsort-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.omnifocus-smartsort-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.omnifocus-smartsort-item:last-child {
+  border-bottom: none;
+}
+
+.omnifocus-smartsort-item:hover {
+  background: var(--background-modifier-hover);
+  margin-left: -12px;
+  margin-right: -12px;
+  padding-left: 12px;
+  padding-right: 12px;
+  border-radius: 6px;
+}
+
+.omnifocus-smartsort-task {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  color: var(--text-normal);
+}
+
+.omnifocus-smartsort-arrow {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.omnifocus-smartsort-dest {
+  font-size: 14px;
+  color: var(--interactive-accent);
+  font-weight: 500;
+}
+
+.omnifocus-smartsort-reason {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.omnifocus-smartsort-accept-btn,
+.omnifocus-smartsort-decline-btn {
+  cursor: pointer;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.omnifocus-smartsort-accept-btn {
+  border: none;
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+.omnifocus-smartsort-accept-btn:hover {
+  opacity: 0.9;
+}
+
+.omnifocus-smartsort-decline-btn {
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  color: var(--text-muted);
+}
+
+.omnifocus-smartsort-decline-btn:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
 }

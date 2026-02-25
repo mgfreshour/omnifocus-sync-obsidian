@@ -21,22 +21,28 @@ import {
 
 export interface PluginSettings {
   textValue: string;
-  syncIntervalMinutes: number;
+  folderSyncBasePath: string;
   llmProvider: LLMProvider;
   llmApiKey: string;
   llmBaseUrl: string;
   llmModel: string;
   llmModelUserStory: string;
+  llmModelSmartSort: string;
+  smartSortAdditionalContext: string;
+  smartSortMaxTasksPerBatch: number;
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
   textValue: '',
-  syncIntervalMinutes: 5,
+  folderSyncBasePath: '',
   llmProvider: 'openrouter',
   llmApiKey: '',
   llmBaseUrl: '',
   llmModel: '',
   llmModelUserStory: '',
+  llmModelSmartSort: '',
+  smartSortAdditionalContext: '',
+  smartSortMaxTasksPerBatch: 10,
 };
 
 export class SettingsTab extends PluginSettingTab {
@@ -54,20 +60,6 @@ export class SettingsTab extends PluginSettingTab {
     containerEl.createEl('h2', { text: 'OmniFocus Sync' });
 
     new Setting(containerEl)
-      .setName('Sync interval (minutes)')
-      .setDesc('How often to auto-sync the OmniFocus inbox. Set to 0 to disable.')
-      .addText((text) =>
-        text
-          .setPlaceholder('5')
-          .setValue(String(this.plugin.settings.syncIntervalMinutes))
-          .onChange(async (value) => {
-            const parsed = parseInt(value, 10);
-            this.plugin.settings.syncIntervalMinutes = isNaN(parsed) ? 0 : Math.max(0, parsed);
-            await this.plugin.saveSettings();
-          }),
-      );
-
-    new Setting(containerEl)
       .setName('Text value')
       .setDesc('Enter a value to store.')
       .addText((text) =>
@@ -76,6 +68,21 @@ export class SettingsTab extends PluginSettingTab {
           .setValue(this.plugin.settings.textValue)
           .onChange(async (value) => {
             this.plugin.settings.textValue = value;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Folder sync base path')
+      .setDesc(
+        'Optional. Subfolder under which to create synced folders from OmniFocus (e.g. "OmniFocus"). Leave empty to use vault root.',
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder('')
+          .setValue(this.plugin.settings.folderSyncBasePath ?? '')
+          .onChange(async (value) => {
+            this.plugin.settings.folderSyncBasePath = value;
             await this.plugin.saveSettings();
           }),
       );
@@ -135,6 +142,47 @@ export class SettingsTab extends PluginSettingTab {
 
     const datalistId = 'llm-models-userstory';
     const datalistEl = containerEl.createEl('datalist', { attr: { id: datalistId } });
+    const datalistSmartSortId = 'llm-models-smartsort';
+    const datalistSmartSortEl = containerEl.createEl('datalist', {
+      attr: { id: datalistSmartSortId },
+    });
+
+    const loadModels = async (targetDatalist: HTMLElement): Promise<void> => {
+      const config: LLMConfig = {
+        provider: (this.plugin.settings.llmProvider ?? 'openrouter') as LLMProvider,
+        apiKey: this.plugin.settings.llmApiKey ?? '',
+        baseUrl: this.plugin.settings.llmBaseUrl?.trim() || undefined,
+      };
+      if (!isLLMConfigured(config)) {
+        new Notice('LLM is not configured. Set API key or base URL first.');
+        return;
+      }
+      const requestAdapter = async (opts: {
+        url: string;
+        method?: string;
+        headers?: Record<string, string>;
+        throw?: boolean;
+      }) => {
+        const res = await requestUrl({
+          url: opts.url,
+          method: opts.method ?? 'GET',
+          headers: opts.headers,
+          throw: opts.throw ?? false,
+        });
+        return { status: res.status, json: res.json };
+      };
+      const models = await fetchModels(requestAdapter, config);
+      if (models.length === 0) {
+        new Notice('Could not load models. Check provider and credentials.');
+        return;
+      }
+      targetDatalist.replaceChildren();
+      for (const id of models) {
+        const opt = targetDatalist.createEl('option', { attr: { value: id } });
+        opt.textContent = id;
+      }
+      new Notice(`Loaded ${models.length} models.`);
+    };
 
     new Setting(containerEl)
       .setName('Model')
@@ -151,45 +199,62 @@ export class SettingsTab extends PluginSettingTab {
       })
       .addButton((btn) =>
         btn.setButtonText('Load models').onClick(async () => {
-          const config: LLMConfig = {
-            provider: (this.plugin.settings.llmProvider ?? 'openrouter') as LLMProvider,
-            apiKey: this.plugin.settings.llmApiKey ?? '',
-            baseUrl: this.plugin.settings.llmBaseUrl?.trim() || undefined,
-          };
-          if (!isLLMConfigured(config)) {
-            new Notice('LLM is not configured. Set API key or base URL first.');
-            return;
-          }
           btn.setDisabled(true);
           btn.setButtonText('Loading...');
-          const requestAdapter = async (opts: {
-            url: string;
-            method?: string;
-            headers?: Record<string, string>;
-            throw?: boolean;
-          }) => {
-            const res = await requestUrl({
-              url: opts.url,
-              method: opts.method ?? 'GET',
-              headers: opts.headers,
-              throw: opts.throw ?? false,
-            });
-            return { status: res.status, json: res.json };
-          };
-          const models = await fetchModels(requestAdapter, config);
+          await loadModels(datalistEl);
           btn.setDisabled(false);
           btn.setButtonText('Load models');
-          if (models.length === 0) {
-            new Notice('Could not load models. Check provider and credentials.');
-            return;
-          }
-          datalistEl.replaceChildren();
-          for (const id of models) {
-            const opt = datalistEl.createEl('option', { attr: { value: id } });
-            opt.textContent = id;
-          }
-          new Notice(`Loaded ${models.length} models.`);
         }),
+      );
+
+    new Setting(containerEl)
+      .setName('Model (Smart sort)')
+      .setDesc('Model for Smart Sort inbox suggestions.')
+      .addText((text) => {
+        text
+          .setPlaceholder('e.g. gpt-4o, llama3.2')
+          .setValue(this.plugin.settings.llmModelSmartSort)
+          .onChange(async (value) => {
+            this.plugin.settings.llmModelSmartSort = value;
+            await this.plugin.saveSettings();
+          });
+        text.inputEl.setAttribute('list', datalistSmartSortId);
+      })
+      .addButton((btn) =>
+        btn.setButtonText('Load models').onClick(async () => {
+          btn.setDisabled(true);
+          btn.setButtonText('Loading...');
+          await loadModels(datalistSmartSortEl);
+          btn.setDisabled(false);
+          btn.setButtonText('Load models');
+        }),
+      );
+
+    new Setting(containerEl)
+      .setName('Smart Sort: Additional context')
+      .setDesc('Optional context for the LLM (e.g. "Focus on work projects", "Ignore personal items").')
+      .addTextArea((text) =>
+        text
+          .setPlaceholder('')
+          .setValue(this.plugin.settings.smartSortAdditionalContext ?? '')
+          .onChange(async (value) => {
+            this.plugin.settings.smartSortAdditionalContext = value;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Smart Sort: Max tasks per batch')
+      .setDesc('Maximum tasks to process in one Smart Sort run (default 10).')
+      .addText((text) =>
+        text
+          .setPlaceholder('10')
+          .setValue(String(this.plugin.settings.smartSortMaxTasksPerBatch ?? 10))
+          .onChange(async (value) => {
+            const parsed = parseInt(value, 10);
+            this.plugin.settings.smartSortMaxTasksPerBatch = isNaN(parsed) ? 10 : Math.max(1, parsed);
+            await this.plugin.saveSettings();
+          }),
       );
 
     const updateLLMVisibility = (): void => {

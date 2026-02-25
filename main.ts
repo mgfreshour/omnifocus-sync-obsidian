@@ -2,6 +2,7 @@ import { Plugin } from 'obsidian';
 import { DEFAULT_SETTINGS, SettingsTab } from './src/settings';
 import type { PluginSettings } from './src/settings';
 import { registerOmniFocusIntegration } from './src/omnifocus-integration';
+import { runSyncFoldersAndNotify } from './src/sync-folders';
 
 export default class ObsidianPlugin extends Plugin {
   settings!: PluginSettings;
@@ -13,6 +14,14 @@ export default class ObsidianPlugin extends Plugin {
     this.addSettingTab(new SettingsTab(this.app, this));
 
     registerOmniFocusIntegration(this);
+
+    this.addCommand({
+      id: 'sync-folders',
+      name: 'Sync folders from OmniFocus',
+      callback: () => {
+        runSyncFoldersAndNotify(this.app, this.settings);
+      },
+    });
   }
 
   onunload() {
@@ -21,7 +30,7 @@ export default class ObsidianPlugin extends Plugin {
 
   async loadSettings() {
     const raw = await this.loadData();
-    const migrated = raw as Record<string, unknown>;
+    const migrated = (raw ?? {}) as Record<string, unknown>;
     if (
       migrated?.openRouterApiKey != null &&
       (migrated.llmProvider == null || migrated.llmApiKey == null)
@@ -34,6 +43,9 @@ export default class ObsidianPlugin extends Plugin {
     }
     if (migrated.llmModelUserStory == null && migrated.llmModel != null) {
       migrated.llmModelUserStory = migrated.llmModel;
+    }
+    if (migrated.llmModelSmartSort == null && migrated.llmModelUserStory != null) {
+      migrated.llmModelSmartSort = migrated.llmModelUserStory;
     }
     this.settings = Object.assign({}, DEFAULT_SETTINGS, migrated);
   }

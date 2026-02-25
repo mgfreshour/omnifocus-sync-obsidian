@@ -1,5 +1,6 @@
 module.exports = {
   roots: ["<rootDir>/"],
+  testPathIgnorePatterns: ["/node_modules/", "/omnifocus-inbox-sort-with-ai/"],
   testMatch: [
     "**/__tests__/**/*.+(ts|tsx|js)",
     "**/?(*.)+(spec|test).+(ts|tsx|js)"

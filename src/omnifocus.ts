@@ -102,6 +102,235 @@ export function parseBlockConfig(input: string): BlockConfig | null {
   return { source, showCompleted };
 }
 
+/** Project with name and note (description). */
+export interface OmniFocusProjectWithNote {
+  name: string;
+  note: string;
+}
+
+/**
+ * Sanitize a path segment for use in a file path (remove or replace / \\ :).
+ *
+ * @param segment - A single folder or project name.
+ * @returns Safe segment for filesystem use.
+ */
+export function sanitizePathSegment(segment: string): string {
+  return segment.replace(/[/\\:]/g, '-').trim() || 'untitled';
+}
+
+/**
+ * Sanitize a full path: each segment is sanitized, then joined by /.
+ *
+ * @param path - Path string (e.g. "Work/Projects/project-a").
+ * @returns Sanitized path safe for vault.createFolder.
+ */
+export function sanitizeProjectPath(path: string): string {
+  return path
+    .split('/')
+    .map((s) => sanitizePathSegment(s.trim()))
+    .filter(Boolean)
+    .join('/');
+}
+
+/**
+ * Fetch all project paths from OmniFocus (with folder hierarchy).
+ *
+ * Each path is the full path to a project, e.g. "Work/Projects/project-a" or
+ * "Personal" for a root-level project. Paths are sanitized for filesystem use.
+ *
+ * @returns Array of path strings.
+ * @throws If `osascript` fails.
+ */
+export function fetchProjectPaths(): Promise<string[]> {
+  const script = `
+tell application "OmniFocus"
+  tell default document
+    set rootFolders to every folder
+    set rootProjects to every project
+  end tell
+  set lf to character id 10
+  set out to ""
+  repeat with f in rootFolders
+    set fname to name of f
+    set sub to my collectFromFolder(f, fname & "/")
+    if (length of out > 0) and (length of sub > 0) then set out to out & lf
+    set out to out & sub
+  end repeat
+  repeat with p in rootProjects
+    set pname to name of p
+    if length of out > 0 then set out to out & lf
+    set out to out & pname
+  end repeat
+  return out
+end tell
+
+on collectFromFolder(theFolder, prefix)
+  tell application "OmniFocus"
+    tell theFolder
+      set folderList to every folder
+      set projectList to every project
+    end tell
+  end tell
+  set lf to character id 10
+  set out to ""
+  repeat with f in folderList
+    set fname to name of f
+    set sub to my collectFromFolder(f, prefix & fname & "/")
+    if (length of out > 0) and (length of sub > 0) then set out to out & lf
+    set out to out & sub
+  end repeat
+  repeat with p in projectList
+    set pname to name of p
+    if length of out > 0 then set out to out & lf
+    set out to out & (prefix & pname)
+  end repeat
+  return out
+end collectFromFolder
+`;
+  return new Promise((resolve, reject) => {
+    execFile('osascript', ['-e', script], (error, stdout, stderr) => {
+      if (error) {
+        reject(
+          new Error(
+            `Failed to fetch OmniFocus project paths: ${stderr || error.message}`,
+          ),
+        );
+        return;
+      }
+
+      const trimmed = stdout.trim();
+      if (trimmed.length === 0) {
+        resolve([]);
+        return;
+      }
+
+      const rawPaths = trimmed.split('\n');
+      const paths = rawPaths
+        .map((p) => p.trim())
+        .filter(Boolean)
+        .map(sanitizeProjectPath);
+      resolve(paths);
+    });
+  });
+}
+
+/** Project path (folder hierarchy) with note for sync to Obsidian. */
+export interface ProjectPathWithNote {
+  path: string;
+  note: string;
+}
+
+/**
+ * Fetch all project paths with notes from OmniFocus (with folder hierarchy).
+ *
+ * Each item has the full path to a project and the project's note (description).
+ * Paths are sanitized for filesystem use.
+ *
+ * @returns Array of { path, note }.
+ * @throws If `osascript` fails.
+ */
+export function fetchProjectPathsWithNotes(): Promise<ProjectPathWithNote[]> {
+  const sep = '\x1f'; // ASCII Unit Separator
+  const lf = '\n';
+  const script = `
+tell application "OmniFocus"
+  tell default document
+    set rootFolders to every folder
+    set rootProjects to every project
+  end tell
+  set sep to character id 31
+  set lf to character id 10
+  set out to ""
+  repeat with f in rootFolders
+    set fname to name of f
+    set sub to my collectFromFolderWithNotes(f, fname & "/")
+    if (length of out > 0) and (length of sub > 0) then set out to out & lf
+    set out to out & sub
+  end repeat
+  repeat with p in rootProjects
+    tell application "OmniFocus"
+      set pname to name of p
+      set noteText to note of p
+      if noteText is missing value then set noteText to ""
+    end tell
+    set oldTID to AppleScript's text item delimiters
+    set AppleScript's text item delimiters to lf
+    set noteParts to text items of noteText
+    set AppleScript's text item delimiters to "\\\\n"
+    set noteSafe to noteParts as text
+    set AppleScript's text item delimiters to oldTID
+    if length of out > 0 then set out to out & lf
+    set out to out & pname & sep & noteSafe
+  end repeat
+  return out
+end tell
+
+on collectFromFolderWithNotes(theFolder, prefix)
+  tell application "OmniFocus"
+    tell theFolder
+      set folderList to every folder
+      set projectList to every project
+    end tell
+  end tell
+  set sep to character id 31
+  set lf to character id 10
+  set out to ""
+  repeat with f in folderList
+    set fname to name of f
+    set sub to my collectFromFolderWithNotes(f, prefix & fname & "/")
+    if (length of out > 0) and (length of sub > 0) then set out to out & lf
+    set out to out & sub
+  end repeat
+  repeat with p in projectList
+    tell application "OmniFocus"
+      set pname to name of p
+      set noteText to note of p
+      if noteText is missing value then set noteText to ""
+    end tell
+    set oldTID to AppleScript's text item delimiters
+    set AppleScript's text item delimiters to lf
+    set noteParts to text items of noteText
+    set AppleScript's text item delimiters to "\\\\n"
+    set noteSafe to noteParts as text
+    set AppleScript's text item delimiters to oldTID
+    if length of out > 0 then set out to out & lf
+    set out to out & (prefix & pname) & sep & noteSafe
+  end repeat
+  return out
+end collectFromFolderWithNotes
+`;
+  return new Promise((resolve, reject) => {
+    execFile('osascript', ['-e', script], (error, stdout, stderr) => {
+      if (error) {
+        reject(
+          new Error(
+            `Failed to fetch OmniFocus project paths with notes: ${stderr || error.message}`,
+          ),
+        );
+        return;
+      }
+
+      const trimmed = stdout.trim();
+      if (trimmed.length === 0) {
+        resolve([]);
+        return;
+      }
+
+      const lines = trimmed.split('\n');
+      const result: ProjectPathWithNote[] = [];
+      for (const line of lines) {
+        const parts = line.split(sep);
+        if (parts.length >= 1) {
+          const path = sanitizeProjectPath((parts[0] ?? '').trim());
+          const note = (parts[1] ?? '').replace(/\\n/g, lf);
+          if (path) result.push({ path, note });
+        }
+      }
+      resolve(result);
+    });
+  });
+}
+
 /**
  * Fetch all project names from OmniFocus.
  *
@@ -136,6 +365,71 @@ end tell
       }
 
       resolve(trimmed.split('\n'));
+    });
+  });
+}
+
+/**
+ * Fetch all projects with names and notes (descriptions) from OmniFocus.
+ *
+ * @returns Array of projects with name and note (empty string if no note).
+ * @throws If `osascript` fails.
+ */
+export function fetchProjectsWithNotes(): Promise<OmniFocusProjectWithNote[]> {
+  const sep = '\x1f'; // ASCII Unit Separator
+  const lf = '\n';
+  const script = `
+tell application "OmniFocus"
+  tell default document
+    set projectList to every flattened project
+    set output to ""
+    set oldTID to AppleScript's text item delimiters
+    repeat with i from 1 to count of projectList
+      set proj to item i of projectList
+      set projName to name of proj
+      set noteText to note of proj
+      if noteText is missing value then set noteText to ""
+      set AppleScript's text item delimiters to linefeed
+      set noteParts to text items of noteText
+      set AppleScript's text item delimiters to "\\\\n"
+      set noteSafe to noteParts as text
+      set AppleScript's text item delimiters to oldTID
+      if i > 1 then set output to output & character id 10
+      set output to output & projName & character id 31 & noteSafe
+    end repeat
+    return output
+  end tell
+end tell
+`;
+  return new Promise((resolve, reject) => {
+    execFile('osascript', ['-e', script], (error, stdout, stderr) => {
+      if (error) {
+        reject(
+          new Error(
+            `Failed to fetch OmniFocus projects: ${stderr || error.message}`,
+          ),
+        );
+        return;
+      }
+
+      const trimmed = stdout.trim();
+      if (trimmed.length === 0) {
+        resolve([]);
+        return;
+      }
+
+      const lines = trimmed.split('\n');
+      const projects: OmniFocusProjectWithNote[] = [];
+      for (const line of lines) {
+        const parts = line.split(sep);
+        if (parts.length >= 1) {
+          projects.push({
+            name: parts[0] ?? '',
+            note: (parts[1] ?? '').replace(/\\n/g, lf),
+          });
+        }
+      }
+      resolve(projects);
     });
   });
 }
@@ -536,6 +830,123 @@ end run
         reject(
           new Error(
             `Failed to complete OmniFocus task: ${stderr || error.message}`,
+          ),
+        );
+        return;
+      }
+      resolve();
+    });
+  });
+}
+
+/**
+ * Update a task's name and note in OmniFocus by id.
+ * Pass current values for any field that should not change.
+ *
+ * @param taskId - The task's persistent id.
+ * @param name - The new task name.
+ * @param note - The new task note.
+ * @throws If `osascript` fails or task not found.
+ */
+export async function updateTask(
+  taskId: string,
+  name: string,
+  note: string,
+): Promise<void> {
+  const script = `
+on run argv
+  set taskId to item 1 of argv
+  set taskName to item 2 of argv
+  set taskNote to item 3 of argv
+  tell application "OmniFocus"
+    tell default document
+      set theTask to first flattened task whose id is taskId
+      set name of theTask to taskName
+      set note of theTask to taskNote
+    end tell
+  end tell
+end run
+`;
+  return new Promise((resolve, reject) => {
+    execFile('osascript', ['-e', script, taskId, name, note], (error, _stdout, stderr) => {
+      if (error) {
+        reject(
+          new Error(
+            `Failed to update OmniFocus task: ${stderr || error.message}`,
+          ),
+        );
+        return;
+      }
+      resolve();
+    });
+  });
+}
+
+/**
+ * Create a new project in OmniFocus.
+ *
+ * @param projectName - The project name.
+ * @throws If `osascript` fails.
+ */
+export async function createProject(projectName: string): Promise<void> {
+  const script = `
+on run argv
+  set projectName to item 1 of argv
+  tell application "OmniFocus"
+    tell default document
+      make new project with properties {name: projectName}
+    end tell
+  end tell
+end run
+`;
+  return new Promise((resolve, reject) => {
+    execFile('osascript', ['-e', script, projectName], (error, _stdout, stderr) => {
+      if (error) {
+        reject(
+          new Error(
+            `Failed to create OmniFocus project: ${stderr || error.message}`,
+          ),
+        );
+        return;
+      }
+      resolve();
+    });
+  });
+}
+
+/**
+ * Move a task to a project in OmniFocus by task id and project name.
+ *
+ * @param taskId - The task's persistent id.
+ * @param projectName - The exact project name (resolved via resolveName).
+ * @throws If `osascript` fails or task/project not found.
+ */
+export async function moveTaskToProject(
+  taskId: string,
+  projectName: string,
+): Promise<void> {
+  const projects = await fetchProjectNames();
+  const resolved = resolveName(projectName, projects, 'project');
+
+  const script = `
+on run argv
+  set taskId to item 1 of argv
+  set projectName to item 2 of argv
+  tell application "OmniFocus"
+    tell default document
+      set theTask to first flattened task whose id is taskId
+      set proj to first flattened project whose name is projectName
+      move theTask to end of tasks of proj
+    end tell
+  end tell
+end run
+`;
+  return new Promise((resolve, reject) => {
+    execFile('osascript', ['-e', script, taskId, resolved], (error, _stdout, stderr) => {
+      if (error) {
+        reject(
+          new Error(
+            `Failed to move OmniFocus task: ${stderr || error.message}`,
           ),
         );
         return;
