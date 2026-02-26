@@ -104,20 +104,21 @@ async function preprocessTasks(tasks: OmniFocusTask[]): Promise<OmniFocusTask[]>
   return enriched;
 }
 
-interface Phase1Assignment {
+/** Phase 1 assignment: project index (0 = no fit) and optional reasoning. Exported for tests. */
+export interface Phase1Assignment {
   project: number;
   reasoning?: string;
 }
 
-/** Remove trailing commas before ] or } so LLM output parses as JSON. */
-function relaxJson(s: string): string {
+/** Remove trailing commas before ] or } so LLM output parses as JSON. Exported for tests. */
+export function relaxJson(s: string): string {
   return s
     .replace(/,\s*\]/g, ']')
     .replace(/,\s*}/g, '}');
 }
 
-/** If content looks like a truncated JSON array (starts with [ but doesn't end with ]), close it. */
-function closeTruncatedArray(s: string): string {
+/** If content looks like a truncated JSON array (starts with [ but doesn't end with ]), close it. Exported for tests. */
+export function closeTruncatedArray(s: string): string {
   const t = s.trim();
   if (t.startsWith('[') && !t.endsWith(']')) {
     return t.replace(/,\s*$/, '') + ']';
@@ -146,7 +147,8 @@ function parsePhase1Entry(x: unknown, projectsLen: number): Phase1Assignment | n
   return null;
 }
 
-function parsePhase1Response(
+/** Parse Phase 1 LLM response into assignments. Exported for tests. */
+export function parsePhase1Response(
   content: string,
   tasksLen: number,
   projectsLen: number,
@@ -172,7 +174,8 @@ interface Phase2Suggestion {
   reasoning?: string;
 }
 
-function parsePhase2Response(content: string): Phase2Suggestion[] | null {
+/** Parse Phase 2 LLM response into suggestions. Exported for tests. */
+export function parsePhase2Response(content: string): Phase2Suggestion[] | null {
   const cleaned = relaxJson(content.replace(/```json\s*|\s*```/g, '').trim());
   try {
     const arr = JSON.parse(cleaned);
