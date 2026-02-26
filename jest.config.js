@@ -1,5 +1,9 @@
 module.exports = {
   roots: ["<rootDir>/"],
+  moduleNameMapper: {
+    "^obsidian$": "<rootDir>/__mocks__/obsidian.js",
+    "^../main$": "<rootDir>/__mocks__/main.js",
+  },
   testPathIgnorePatterns: ["/node_modules/", "/omnifocus-inbox-sort-with-ai/"],
   testMatch: [
     "**/__tests__/**/*.+(ts|tsx|js)",

@@ -18,13 +18,14 @@ import {
   updateProjectNote,
 } from './omnifocus';
 import { deriveFolderPathsToCreate } from './sync-folders-paths';
-import { buildNewFrontmatter, updateContentFrontmatter } from './sync-folders-frontmatter';
+import { buildNewFileContent, updateContentFrontmatter } from './sync-folders-frontmatter';
 import { simpleChat, isLLMConfigured } from './llm';
 import type { LLMPluginContext } from './llm';
 
 export { deriveFolderPathsToCreate } from './sync-folders-paths';
 export {
   buildNewFrontmatter,
+  buildNewFileContent,
   escapeDescriptionForYaml,
   updateContentFrontmatter,
 } from './sync-folders-frontmatter';
@@ -147,16 +148,17 @@ async function syncProjectFiles(
     }
 
     const fullFolderPath = base ? `${base}/${projectPath}` : projectPath;
-    const fileName = pathBasename(projectPath) + '.md';
+    const projectName = pathBasename(projectPath);
+    const fileName = projectName + '.md';
     const filePath = `${fullFolderPath}/${fileName}`;
 
     const existingFile = app.vault.getFileByPath(filePath);
     if (!existingFile) {
-      const content = buildNewFrontmatter(description) + '\n';
+      const content = buildNewFileContent(description, projectName);
       await app.vault.create(filePath, content);
     } else {
       const content = await app.vault.read(existingFile);
-      const updated = updateContentFrontmatter(content, description);
+      const updated = updateContentFrontmatter(content, description, projectName);
       await app.vault.modify(existingFile, updated);
     }
   }

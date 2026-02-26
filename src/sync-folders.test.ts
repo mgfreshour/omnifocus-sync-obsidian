@@ -1,6 +1,9 @@
 import {
+  bodyHasOmnifocusBlock,
+  buildNewFileContent,
   buildNewFrontmatter,
   escapeDescriptionForYaml,
+  formatOmnifocusBlock,
   updateContentFrontmatter,
 } from './sync-folders-frontmatter';
 import { deriveFolderPathsToCreate } from './sync-folders-paths';
@@ -69,6 +72,95 @@ body`;
     const out = updateContentFrontmatter(content, 'New');
     expect(out).toContain('sticker: emoji//1f40d');
     expect(out).toContain('description: "New"');
+  });
+});
+
+describe('updateContentFrontmatter with projectName', () => {
+  it('when projectName omitted, behavior unchanged (no omnifocus block added)', () => {
+    const content = `---
+sticker: emoji//1f4a1
+description: old
+---
+
+body`;
+    const out = updateContentFrontmatter(content, 'Updated');
+    expect(out).not.toContain('```omnifocus');
+    expect(out).toContain('\n\nbody');
+  });
+
+  it('adds omnifocus block after frontmatter when projectName provided and body has no block', () => {
+    const content = `---
+sticker: emoji//1f4a1
+description: old
+---
+
+Some body text`;
+    const out = updateContentFrontmatter(content, 'Updated', 'My Project');
+    expect(out).toContain('sticker: emoji//1f4a1');
+    expect(out).toContain('description: "Updated"');
+    expect(out).toContain('```omnifocus\nproject: My Project\n```');
+    expect(out).toContain('Some body text');
+    expect(out.endsWith('Some body text')).toBe(true);
+  });
+
+  it('does not add second omnifocus block when body already has one', () => {
+    const content = `---
+description: old
+---
+
+\`\`\`omnifocus
+project: Other Project
+\`\`\`
+
+rest of body`;
+    const out = updateContentFrontmatter(content, 'Updated', 'My Project');
+    const blockCount = (out.match(/```\s*omnifocus/gi) ?? []).length;
+    expect(blockCount).toBe(1);
+    expect(out).toContain('project: Other Project');
+    expect(out).toContain('rest of body');
+  });
+});
+
+describe('formatOmnifocusBlock', () => {
+  it('returns omnifocus fenced block with project line', () => {
+    expect(formatOmnifocusBlock('My Project')).toBe(
+      '```omnifocus\nproject: My Project\n```',
+    );
+  });
+
+  it('replaces newlines in project name with space', () => {
+    expect(formatOmnifocusBlock('Line1\nLine2')).toBe(
+      '```omnifocus\nproject: Line1 Line2\n```',
+    );
+  });
+});
+
+describe('bodyHasOmnifocusBlock', () => {
+  it('returns true when body contains omnifocus block', () => {
+    expect(bodyHasOmnifocusBlock('```omnifocus\nproject: X\n```')).toBe(true);
+    expect(bodyHasOmnifocusBlock('text\n```omnifocus\nproject: Y\n```')).toBe(true);
+  });
+
+  it('returns false when body has no omnifocus block', () => {
+    expect(bodyHasOmnifocusBlock('plain text')).toBe(false);
+    expect(bodyHasOmnifocusBlock('```js\ncode\n```')).toBe(false);
+  });
+});
+
+describe('buildNewFileContent', () => {
+  it('includes frontmatter and exactly one omnifocus block with project name', () => {
+    const out = buildNewFileContent('A project', 'My Project');
+    expect(out).toMatch(/^---\r?\n[\s\S]*\n---\n/);
+    expect(out).toContain('description: "A project"');
+    expect(out).toContain('```omnifocus\nproject: My Project\n```');
+    const blockCount = (out.match(/```\s*omnifocus/gi) ?? []).length;
+    expect(blockCount).toBe(1);
+  });
+
+  it('uses TODO for empty description', () => {
+    const out = buildNewFileContent('', 'Unnamed');
+    expect(out).toContain('description: "TODO"');
+    expect(out).toContain('project: Unnamed');
   });
 });
 
